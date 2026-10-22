@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart Hire - Login</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="center">
+<div class="card auth">
+  <h1>Ai Based Resume Screening System</h1>
+  <p class="muted">AI resume screening portal</p>
+  <div class="tabs"><button id="tLogin" class="active">Login</button><button id="tReg">Register</button></div>
+
+  <form id="loginForm">
+    <label>Email</label><input id="lEmail" type="email" required>
+    <label>Password</label><input id="lPass" type="password" required>
+    <button type="submit" style="width:100%">Login</button>
+  </form>
+
+  <form id="regForm" class="hidden">
+    <label>Full name</label><input id="rName" required>
+    <label>Email</label><input id="rEmail" type="email" required>
+    <label>Password (min 6)</label><input id="rPass" type="password" minlength="6" required>
+    <label>Your skills (comma separated)</label><input id="rSkills" placeholder="java, sql, html, css">
+    <button type="submit" style="width:100%">Create account</button>
+  </form>
+</div>
+<script src="/js/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+function go(role) { location.href = role === 'ADMIN' ? '/admin.html' : '/jobs.html'; }
+api('/api/me').then(u => go(u.role)).catch(() => {});
+
+$('tLogin').onclick = () => { $('loginForm').classList.remove('hidden'); $('regForm').classList.add('hidden'); $('tLogin').classList.add('active'); $('tReg').classList.remove('active'); };
+$('tReg').onclick = () => { $('regForm').classList.remove('hidden'); $('loginForm').classList.add('hidden'); $('tReg').classList.add('active'); $('tLogin').classList.remove('active'); };
+
+$('loginForm').onsubmit = async e => {
+  e.preventDefault();
+  try { const r = await post('/api/login', { email: $('lEmail').value, password: $('lPass').value }); go(r.role); }
+  catch (err) { toast(err.message); }
+};
+$('regForm').onsubmit = async e => {
+  e.preventDefault();
+  try {
+    await post('/api/register', { name: $('rName').value, email: $('rEmail').value, password: $('rPass').value, skills: $('rSkills').value });
+    toast('Account created. Please login.');
+    $('tLogin').click();
+  } catch (err) { toast(err.message); }
+};
+</script>
+</body>
+</html>

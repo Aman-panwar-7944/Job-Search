@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart Hire - Admin</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header><h1>Smart Hire &middot; Admin</h1><div><span id="who"></span> <button class="light" onclick="logout()">Logout</button></div></header>
+<main>
+  <div class="card">
+    <h3>Create a new job</h3>
+    <input id="title" placeholder="Job title">
+    <textarea id="desc" rows="3" placeholder="Job description"></textarea>
+    <input id="req" placeholder="Required skills (comma separated) e.g. java, sql, html">
+    <input id="exp" type="number" min="0" value="0" placeholder="Minimum years of experience">
+    <button onclick="createJob()">Publish job</button>
+  </div>
+
+  <h2>Jobs</h2>
+  <div class="card"><table>
+    <thead><tr><th>Title</th><th>Skills</th><th>Exp</th><th>Applicants</th><th></th></tr></thead>
+    <tbody id="jobs"></tbody></table></div>
+
+  <div id="appSection" class="hidden">
+    <h2 id="appTitle">Applicants</h2>
+    <div class="card"><table>
+      <thead><tr><th>Candidate</th><th>AI score</th><th>Breakdown</th><th>Status</th><th></th></tr></thead>
+      <tbody id="apps"></tbody></table></div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let currentJob = null;
+
+async function loadJobs() {
+  const jobs = await api('/api/admin/jobs');
+  $('jobs').innerHTML = jobs.length ? jobs.map(j => `<tr>
+    <td>${esc(j.title)}</td><td>${esc(j.requiredSkills)}</td><td>${j.minExperience}</td><td>${j.applicants}</td>
+    <td><button onclick="viewApplicants(${j.id}, '${esc(j.title).replace(/'/g, '')}')">Applicants</button>
+        <button class="danger" onclick="delJob(${j.id})">Delete</button></td></tr>`).join('')
+    : '<tr><td colspan="5" class="muted">No jobs yet.</td></tr>';
+}
+
+async function createJob() {
+  try {
+    await post('/api/admin/jobs', { title: $('title').value, description: $('desc').value, requiredSkills: $('req').value, minExperience: $('exp').value });
+    ['title', 'desc', 'req'].forEach(i => $(i).value = ''); $('exp').value = 0;
+    toast('Job published'); loadJobs();
+  } catch (e) { toast(e.message); }
+}
+
+async function delJob(id) {
+  if (!confirm('Delete this job and all its applications?')) return;
+  await api('/api/admin/jobs?id=' + id, { method: 'DELETE' });
+  $('appSection').classList.add('hidden'); loadJobs();
+}
+
+async function viewApplicants(id, title) {
+  currentJob = { id, title };
+  const list = await api('/api/admin/applicants?jobId=' + id);
+  $('appSection').classList.remove('hidden');
+  $('appTitle').textContent = 'Applicants for ' + title + ' (best score first)';
+  $('apps').innerHTML = list.length ? list.map(a => {
+    const b = a.breakdown;
+    const chips = (b.matched || []).map(s => `<span class="chip m">${esc(s)}</span>`).join('') +
+                  (b.missing || []).map(s => `<span class="chip x">${esc(s)}</span>`).join('');
+    return `<tr>
+      <td><b>${esc(a.name)}</b><br><span class="muted">${esc(a.email)}<br>${esc(a.appliedAt)}</span></td>
+      <td><span class="badge" style="font-size:16px">${a.score}</span></td>
+      <td class="muted">Skills ${b.skills}% &middot; Similarity ${b.similarity}% &middot; Experience ${b.experience}% (${b.yearsFound} yr found) &middot; Structure ${b.structure}%<br>${chips}</td>
+      <td><span class="badge ${a.status === 'SHORTLISTED' ? 'ok' : a.status === 'REJECTED' ? 'bad' : ''}">${esc(a.status)}</span></td>
+      <td><button class="ok" onclick="setStatus(${a.id},'SHORTLISTED')">Shortlist</button>
+          <button class="danger" onclick="setStatus(${a.id},'REJECTED')">Reject</button>
+          <a href="/api/admin/resume?id=${a.id}">Resume</a></td></tr>`;
+  }).join('') : '<tr><td colspan="5" class="muted">No applicants yet.</td></tr>';
+}
+
+async function setStatus(id, status) {
+  await post('/api/admin/status', { id: String(id), status });
+  viewApplicants(currentJob.id, currentJob.title);
+}
+
+(async () => {
+  const me = await api('/api/me');
+  if (me.role !== 'ADMIN') return location.href = '/jobs.html';
+  $('who').textContent = me.name;
+  loadJobs();
+})();
+</script>
+</body>
+</html>
